@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Annual Report Analyst — upload annual-report PDFs and ask cited, verbatim questions about them."
+    />
+    <title>Annual Report Analyst</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231877f2'/%3E%3Crect x='8' y='17' width='4' height='7' rx='1' fill='%23ffffff'/%3E%3Crect x='14' y='12' width='4' height='12' rx='1' fill='%23ffffff'/%3E%3Crect x='20' y='8' width='4' height='16' rx='1' fill='%23ffffff'/%3E%3C/svg%3E"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css?v=18" />
+    <script>
+      (function () {
+        var theme = localStorage.getItem("report_rag_theme");
+        var dark =
+          theme === "dark" ||
+          (theme !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+        if (dark) document.documentElement.classList.add("theme-dark");
+      })();
+    </script>
+  </head>
+  <body>
+    <template id="brand-mark-tpl">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+        <rect width="32" height="32" rx="8" />
+        <rect class="bar" x="8" y="17" width="4" height="7" rx="1" />
+        <rect class="bar" x="14" y="12" width="4" height="12" rx="1" />
+        <rect class="bar" x="20" y="8" width="4" height="16" rx="1" />
+      </svg>
+    </template>
+
+    <!-- Auth gate -->
+    <section id="auth-screen" class="auth-screen" hidden>
+      <aside class="privacy-warning" role="note">
+        <strong>Do not upload personal documents.</strong>
+        <p>
+          Text from uploaded files can be sent to an external LLM, and no GDPR
+          guardrail is in place yet. Upload public documents only.
+        </p>
+      </aside>
+      <div class="auth-layout">
+        <div class="auth-intro">
+          <p class="brand"><span data-brand-mark></span>Annual Report Analyst</p>
+          <h1>Get cited answers from annual reports</h1>
+          <p class="muted">
+            Upload annual-report PDFs, let the assistant index them, and ask
+            questions like <em>“How much did Shell spend on climate change
+            adaptation in 2025?”</em>
+          </p>
+          <ul class="feature-list">
+            <li>
+              <strong>Ingest PDF reports</strong>
+              <span class="muted small">Text extraction, chunking and multilingual embeddings</span>
+            </li>
+            <li>
+              <strong>Verbatim datapoints</strong>
+              <span class="muted small">Answers quote the report and cite the page</span>
+            </li>
+            <li>
+              <strong>Pre-extracted KPIs</strong>
+              <span class="muted small">FTE count and sustainability goals per report</span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="auth-panel">
+          <div class="auth-theme-row">
+            <button type="button" class="btn ghost small theme-toggle" aria-pressed="false">Dark mode</button>
+          </div>
+          <h2>Sign in to your workspace</h2>
+          <p class="muted small">
+            Your <code>apiToken</code> is the login secret. After you create an
+            account it is shown once, so copy it somewhere safe.
+          </p>
+
+          <div class="tabs" role="tablist">
+            <button type="button" class="tab active" data-auth-tab="create">Create account</button>
+            <button type="button" class="tab" data-auth-tab="token">Use token</button>
+            <button type="button" class="tab" data-auth-tab="regen">Regenerate</button>
+          </div>
+
+          <form id="form-create-user" class="stack">
+            <label>
+              Email
+              <input name="email" type="email" required placeholder="analyst@example.com" />
+            </label>
+            <label>
+              Display name
+              <input name="displayName" type="text" required placeholder="Your name" />
+            </label>
+            <button type="submit" class="btn primary">Create account</button>
+          </form>
+
+          <form id="form-token" class="stack" hidden>
+            <label>
+              API token
+              <input name="token" type="password" required placeholder="Paste apiToken" autocomplete="off" />
+            </label>
+            <button type="submit" class="btn primary">Enter workspace</button>
+          </form>
+
+          <form id="form-regen" class="stack" hidden>
+            <p class="muted small">
+              Logout clears the browser copy. This issues a <strong>new</strong> token.
+            </p>
+            <label>
+              Email
+              <input name="email" type="email" required placeholder="analyst@example.com" />
+            </label>
+            <button type="submit" class="btn primary">Regenerate token</button>
+          </form>
+
+          <div id="token-reveal" class="stack token-reveal" hidden>
+            <p><strong>Copy your API token now</strong> — it won’t be shown again.</p>
+            <label>
+              API token
+              <input id="revealed-token" type="text" readonly />
+            </label>
+            <div class="row-actions">
+              <button type="button" id="btn-copy-token" class="btn">Copy</button>
+              <button type="button" id="btn-enter-after-token" class="btn primary">Continue</button>
+            </div>
+          </div>
+
+          <p id="auth-error" class="error" hidden></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Home: report projects -->
+    <div id="home-screen" class="home-screen" hidden>
+      <header class="topbar">
+        <div class="topbar-left">
+          <a href="/" class="brand brand-link" data-nav="home"><span data-brand-mark></span>Annual Report Analyst</a>
+        </div>
+        <div class="topbar-right">
+          <span id="home-user-chip" class="user-chip"></span>
+          <button type="button" class="btn ghost small theme-toggle" aria-pressed="false">Dark mode</button>
+          <button type="button" id="btn-logout-home" class="btn ghost">Log out</button>
+        </div>
+      </header>
+
+      <div class="home-body">
+        <aside class="privacy-warning" role="note">
+          <strong>Do not upload personal documents.</strong>
+          <p>
+            Text from uploaded files can be sent to an external LLM, and no GDPR
+            guardrail is in place yet. Upload public documents only.
+          </p>
+        </aside>
+        <div class="home-hero">
+          <p class="eyebrow">Annual report analysis assistant</p>
+          <h1>Analyse annual reports with cited answers</h1>
+          <p class="muted">
+            Group one or more annual reports in a project, then ask questions
+            across them. The assistant quotes the report verbatim and extracts
+            key datapoints such as FTE count and sustainability goals at ingest.
+          </p>
+          <div class="hero-steps">
+            <div class="hero-step">
+              <span class="step-num">1</span>
+              <div>
+                <strong>Create a project</strong>
+                <span class="muted small">e.g. “Shell 2024 vs 2025”</span>
+              </div>
+            </div>
+            <div class="hero-step">
+              <span class="step-num">2</span>
+              <div>
+                <strong>Upload annual reports</strong>
+                <span class="muted small">PDFs are extracted, chunked and indexed</span>
+              </div>
+            </div>
+            <div class="hero-step">
+              <span class="step-num">3</span>
+              <div>
+                <strong>Ask the analyst</strong>
+                <span class="muted small">Verbatim answers with page citations</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <section class="home-projects">
+          <div class="section-head home-section-head">
+            <h2>Report projects</h2>
+            <button type="button" id="btn-home-new-project" class="btn primary">New project</button>
+          </div>
+
+          <form id="form-home-new-project" class="inline-form home-create" hidden>
+            <input name="name" type="text" placeholder="e.g. Heineken annual reports" required maxlength="200" />
+            <button type="submit" class="btn primary small">Create</button>
+          </form>
+
+          <div id="project-cards" class="project-cards"></div>
+        </section>
+      </div>
+    </div>
+
+    <!-- Project workspace: reports | report canvas | analyst -->
+    <div id="workspace" class="workspace" hidden>
+      <input
+        id="file-input"
+        type="file"
+        accept=".pdf,.txt,.png,.jpg,.jpeg,.docx,.pptx,.md"
+        hidden
+      />
+      <header class="topbar">
+        <div class="topbar-left">
+          <a href="/" class="brand brand-link" data-nav="home"><span data-brand-mark></span>Annual Report Analyst</a>
+          <span class="divider" aria-hidden="true"></span>
+          <label class="project-switcher">
+            <span class="sr-only">Project</span>
+            <select id="project-select" aria-label="Switch project"></select>
+          </label>
+        </div>
+        <div class="topbar-right">
+          <span id="user-chip" class="user-chip"></span>
+          <button type="button" class="btn ghost small theme-toggle" aria-pressed="false">Dark mode</button>
+          <button type="button" id="btn-logout" class="btn ghost">Log out</button>
+          <button type="button" id="btn-toggle-materials" class="btn ghost active" title="Toggle reports" aria-pressed="true">
+            Reports
+          </button>
+          <button type="button" id="btn-toggle-chat" class="btn ghost active" title="Toggle analyst" aria-pressed="true">
+            Analyst
+          </button>
+        </div>
+      </header>
+
+      <div class="layout" id="layout">
+        <aside class="sidebar" id="materials-panel" aria-label="Annual reports">
+          <div class="sidebar-header">
+            <h2>Reports</h2>
+            <button type="button" id="btn-close-materials" class="btn ghost small" aria-label="Hide reports">
+              −
+            </button>
+          </div>
+
+          <section class="sidebar-section grow">
+            <div class="section-head">
+              <h3>Annual reports</h3>
+              <label class="btn icon" title="Upload annual report" for="file-input">+</label>
+            </div>
+            <p id="pending-badge" class="pending-badge" hidden></p>
+            <ul id="source-list" class="item-list sources"></ul>
+            <p class="drop-hint muted small">Drop a PDF here to upload</p>
+          </section>
+        </aside>
+
+        <main class="main" aria-label="Report">
+          <div class="content-header">
+            <h2 id="doc-title">No report selected</h2>
+            <span id="doc-status" class="status-pill" hidden></span>
+          </div>
+          <div id="main-body" class="main-body"></div>
+        </main>
+
+        <aside class="chat" id="chat-panel" aria-label="Report analyst">
+          <div class="chat-header">
+            <h2>Report analyst</h2>
+            <button type="button" id="btn-maximize-chat" class="btn ghost small" aria-label="Maximize analyst">
+              ⛶
+            </button>
+            <button type="button" id="btn-close-chat" class="btn ghost small" aria-label="Collapse analyst">
+              −
+            </button>
+          </div>
+          <details class="chat-context" id="chat-context">
+            <summary>Session</summary>
+            <div class="chat-context-chips">
+              <span class="id-chip" title="userId"><span class="id-label">user</span> <code id="chip-user-id">—</code></span>
+              <span class="id-chip" title="projectId"><span class="id-label">project</span> <code id="chip-project-id">—</code></span>
+              <span class="id-chip" title="threadId"><span class="id-label">thread</span> <code id="chip-thread-id">—</code></span>
+            </div>
+          </details>
+          <div class="chat-messages" id="chat-messages"></div>
+          <div class="chat-actions">
+            <button type="button" class="chip ghost" data-prompt="Summarize the key highlights of this annual report.">Summarize report</button>
+            <button type="button" class="chip ghost" data-prompt="What was the total FTE count at year end?">FTE count</button>
+            <button type="button" class="chip ghost" data-prompt="List the company's sustainability goals and targets, quoting the report.">Sustainability goals</button>
+          </div>
+          <form id="chat-form" class="chat-composer" autocomplete="off">
+            <label class="composer-add" for="file-input" title="Upload annual report">+</label>
+            <input
+              id="chat-input"
+              type="text"
+              placeholder="Ask about these annual reports…"
+            />
+            <button type="submit" class="composer-send" aria-label="Send">↑</button>
+          </form>
+          <p class="chat-footnote muted small">
+            Answers quote the reports with filename, section and page citations.
+          </p>
+        </aside>
+      </div>
+    </div>
+
+    <div id="toast" class="toast" hidden></div>
+    <script src="/config.js"></script>
+    <script src="/app.js?v=27" type="module"></script>
+  </body>
+</html>

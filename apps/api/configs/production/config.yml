@@ -1,0 +1,50 @@
+# Annual Report Analyst API — non-secret settings.
+# Secrets (DB credentials, AGENT_SECRET, INTERNAL_WORKFLOW_SECRET, API keys) live in .env.
+# Relative paths resolve against apps/api/.
+
+api.environment: production
+api.hostName: 0.0.0.0
+api.port: 8000
+api.logLevel: info
+api.webStaticDir: ../web
+api.corsOrigins: []
+
+database.host: localhost
+database.port: 5432
+database.name: chat_project
+
+storage.dataRoot: ../../data
+storage.maxUploadBytes: 104857600
+storage.allowedExtensions: [pdf, txt, png, jpg, jpeg, docx, pptx, md]
+
+textExtraction.url: http://localhost:5000
+textExtraction.useOcr: false
+textExtraction.timeoutSeconds: 300
+
+embedding.url: http://localhost:5100
+embedding.timeoutSeconds: 120
+embedding.provider: openai
+embedding.modelName: text-embedding-3-small
+embedding.dimension: 1536
+
+# Structure-aware chunking (section > paragraph > sentence > word), measured in characters.
+# ~2000 chars is ~450-550 gte tokens; chunks never exceed maxChars (model limit is 8192 tokens).
+# Consecutive chunks in the same section share the last overlapSentences whole sentences.
+chunking.targetChars: 2000
+chunking.maxChars: 2500
+chunking.overlapSentences: 2
+
+vectorSearch.defaultLimit: 8
+vectorSearch.maxLimit: 50
+
+ingest.staleProcessingMinutes: 14
+
+langgraph.url: http://localhost:8080
+langgraph.internalUrl: ""
+
+llm.summaryEnabled: true
+llm.descriptionContextChunks: 10
+llm.timeoutSeconds: 60
+
+langfuse.tracing: true
+langfuse.promptCacheTtlSeconds: 60

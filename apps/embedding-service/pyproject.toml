@@ -1,0 +1,58 @@
+[project]
+name = "embedding-service"
+version = "0.1.0"
+description = "Local Hugging Face embedding service (gte-multilingual-base)."
+authors = [{ name = "Anustup Das", email = "33954271+anustupdas@users.noreply.github.com" }]
+readme = "README.md"
+requires-python = ">=3.11,<3.15"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "pydantic>=2.9.0",
+    "python-dotenv>=1.0.0",
+    "pyyaml>=6.0",
+    "httpx>=0.28.0",
+    "prometheus-client>=0.21.0",
+    # gte-multilingual-base's remote code (Alibaba-NLP/new-impl) targets transformers 4.x;
+    # transformers 5 leaves its buffers uninitialised and drops get_extended_attention_mask.
+    "sentence-transformers>=5.1.0,<6.0.0",
+    "transformers>=4.51.0,<5.0.0",
+    "torch>=2.2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "httpx>=0.28.0",
+    "black>=24.0.0",
+    "flake8>=6.0.0",
+    "ruff>=0.9.0",
+    "requests>=2.32.0",
+]
+
+[project.scripts]
+embedding_service_web_start = "embedding_service.run:run_cli"
+run-cli = "embedding_service.run:run_cli"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/embedding_service"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests/embedding_service"]
+
+[tool.black]
+line-length = 120
+target-version = ["py312"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+exclude = [".venv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = ["E501"]

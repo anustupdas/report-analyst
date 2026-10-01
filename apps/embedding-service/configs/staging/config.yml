@@ -1,0 +1,45 @@
+---
+###############################################################
+#                   STG
+#      EMBEDDING SERVICE CONFIGURATION
+###############################################################
+# Scraped at GET /metrics on embeddingservice.port. No separate metrics port.
+prometheus.enabled: true
+embeddingservice.port: 5100
+embeddingservice.hostName: 0.0.0.0
+embeddingservice.logFile: null
+embeddingservice.logLevel: info
+fastapi.logLevel: info
+
+# Hugging Face model files are downloaded into the local HF cache at startup.
+# The model is loaded into RAM on the first embed request (lazy).
+# Nothing is vendored in git. The first entry is the default model.
+models.enabled:
+  - gte-multilingual-base
+models.prefetchOnStart: true
+# Load both query + passage model copies into RAM at startup (avoids first-request lag).
+models.warmupOnStart: true
+
+# Alibaba-NLP/gte-multilingual-base: 768-d, 8192 tokens, no query/passage prefixes.
+# Its modeling code lives in Alibaba-NLP/new-impl, so it needs trust_remote_code.
+gte-multilingual-base.hfModelId: Alibaba-NLP/gte-multilingual-base
+gte-multilingual-base.dimension: 768
+gte-multilingual-base.version: 1
+gte-multilingual-base.maxSeqLength: 8192
+gte-multilingual-base.trustRemoteCode: true
+gte-multilingual-base.extraHubRepos:
+  - Alibaba-NLP/new-impl
+gte-multilingual-base.queryPrefix: ""
+gte-multilingual-base.passagePrefix: ""
+
+# Previous model, kept for reference. Switching back needs a 1024-d
+# document_chunks column and a full re-embed.
+multilingual-e5-large.hfModelId: intfloat/multilingual-e5-large
+multilingual-e5-large.dimension: 1024
+multilingual-e5-large.version: 1
+multilingual-e5-large.maxSeqLength: 512
+multilingual-e5-large.queryPrefix: "query: "
+multilingual-e5-large.passagePrefix: "passage: "
+
+normalize_embedding: true
+max_batch_size: 32

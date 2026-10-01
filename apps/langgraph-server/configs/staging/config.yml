@@ -1,0 +1,34 @@
+# Annual Report Analyst LangGraph server — non-secret settings.
+# Secrets (DB credentials, AGENT_SECRET, OPENAI_API_KEY) live in .env.
+
+langgraph.environment: development
+langgraph.hostName: 0.0.0.0
+langgraph.port: 8080
+langgraph.logLevel: info
+langgraph.checkpoint: postgres
+langgraph.sseKeepaliveSeconds: 15
+langgraph.corsOrigins:
+  - http://localhost:8000
+  - http://127.0.0.1:8000
+  - http://localhost:5173
+  - http://127.0.0.1:5173
+
+api.url: http://localhost:8000
+api.timeoutSeconds: 30
+
+database.host: localhost
+database.port: 5432
+database.name: chat_project
+
+vectorSearch.defaultLimit: 8
+
+langfuse.tracing: true
+langfuse.promptCacheTtlSeconds: 60
+
+supervisor.summarizationEnabled: true
+supervisor.summarizationTriggerMessages: 50
+supervisor.summarizationKeepMessages: 20
+supervisor.summarizationTriggerTokens: 80000
+supervisor.summarizationTrimTokens: 24000
+# Hard cap on report-search-tool calls per user turn (prompt also steers toward fewer).
+supervisor.maxReportSearchesPerTurn: 5

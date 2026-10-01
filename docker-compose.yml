@@ -1,0 +1,165 @@
+# Three steps, from the repo README:
+#   cp .env.example .env          # set OPENAI_API_KEY
+#   docker compose --env-file .env build
+#   docker compose --env-file .env up
+#
+# The root .env also chooses TEXT_EXTRACTION_USE_OCR and EMBEDDING_PROVIDER.
+# Service hostnames are set here, because inside this network "localhost" is
+# the container itself. The browser still uses the published ports
+# (UI :8000, chat :8080).
+
+x-secrets: &secrets
+  env_file:
+    - path: .env
+      required: false
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-chat}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-chat}
+      POSTGRES_DB: ${POSTGRES_DB:-chat_project}
+    volumes:
+      - chat_project_pgdata:/var/lib/postgresql/data
+      - ./db/docker/init-extensions.sql:/docker-entrypoint-initdb.d/01-extensions.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-chat} -d ${POSTGRES_DB:-chat_project}"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+
+  migrate:
+    image: pgvector/pgvector:pg16
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      POSTGRES_USER: ${POSTGRES_USER:-chat}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-chat}
+      POSTGRES_DB: ${POSTGRES_DB:-chat_project}
+    volumes:
+      - ./db/migrations:/migrations:ro
+      - ./docker/migrate.sh:/migrate.sh:ro
+    entrypoint: ["/bin/sh", "/migrate.sh"]
+
+  text-extraction:
+    <<: *secrets
+    build:
+      context: ./apps/text-extraction-service
+      dockerfile: docker/Dockerfile
+    restart: unless-stopped
+    user: "0:0"
+    environment:
+      LOCAL_DATA_DIR: /data
+      # Same switch as TEXT_EXTRACTION_USE_OCR. true requires MISTRAL_API_KEY.
+      USE_MISTRAL: ${TEXT_EXTRACTION_USE_OCR:-false}
+      MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
+    ports:
+      - "5000:5000"
+    volumes:
+      - ${DATA_DIR:-./data}:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  embedding:
+    <<: *secrets
+    build:
+      context: ./apps/embedding-service
+      dockerfile: docker/Dockerfile
+    restart: unless-stopped
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?Set OPENAI_API_KEY in .env}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-openai}
+    ports:
+      - "5100:5100"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5100/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 300s
+
+  langgraph:
+    <<: *secrets
+    build:
+      context: .
+      dockerfile: apps/langgraph-server/docker/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?Set OPENAI_API_KEY in .env}
+      AGENT_SECRET: ${AGENT_SECRET:-dev-agent-secret-change-me}
+      POSTGRES_USER: ${POSTGRES_USER:-chat}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-chat}
+      DATABASE_HOST: postgres
+      DATABASE_PORT: "5432"
+      DATABASE_NAME: ${POSTGRES_DB:-chat_project}
+      API_URL: http://api:8000
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 25s
+
+  api:
+    <<: *secrets
+    build:
+      context: .
+      dockerfile: apps/api/docker/Dockerfile
+    restart: unless-stopped
+    user: "0:0"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      text-extraction:
+        condition: service_healthy
+      embedding:
+        condition: service_healthy
+      langgraph:
+        condition: service_healthy
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?Set OPENAI_API_KEY in .env}
+      AGENT_SECRET: ${AGENT_SECRET:-dev-agent-secret-change-me}
+      POSTGRES_USER: ${POSTGRES_USER:-chat}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-chat}
+      DATABASE_HOST: postgres
+      DATABASE_PORT: "5432"
+      DATABASE_NAME: ${POSTGRES_DB:-chat_project}
+      DATA_ROOT: /data
+      WEB_STATIC_DIR: /web
+      TEXT_EXTRACTION_URL: http://text-extraction:5000
+      TEXT_EXTRACTION_USE_OCR: ${TEXT_EXTRACTION_USE_OCR:-false}
+      EMBEDDING_SERVICE_URL: http://embedding:5100
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-openai}
+      # Browser address. Datapoints use the in-network name below.
+      LANGGRAPH_URL: http://localhost:8080
+      LANGGRAPH_INTERNAL_URL: http://langgraph:8080
+    ports:
+      - "8000:8000"
+    volumes:
+      - ${DATA_DIR:-./data}:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+volumes:
+  chat_project_pgdata:

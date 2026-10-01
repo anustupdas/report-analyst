@@ -1,0 +1,61 @@
+---
+###############################################################
+#                   STG
+#      TEXT EXTRACTION SERVICE CONFIGURATION
+###############################################################
+# Scraped at GET /metrics on textextractionservice.port. No separate metrics port.
+prometheus.enabled: true
+textextractionservice.port: 5000
+textextractionservice.hostName: 0.0.0.0
+textextractionservice.logFile: null
+textextractionservice.logLevel: info
+fastapi.logLevel: info
+
+# false = local disk. true requires AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY in .env
+# (optional storage.awsEndpointUrl for S3-compatible stores)
+storage.useS3: false
+storage.serviceName: text-extraction-service
+storage.bucket: null
+storage.awsRegion: eu-west-1
+# Shared monorepo data root, relative to apps/text-extraction-service/. Layout:
+#   data/{user_id}/{project_id}/{doc_id}/original.pdf
+data.location: "../../data"
+
+files.supportedFormats:
+  - txt
+  - ppt
+  - pptx
+  - pdf
+  - doc
+  - docx
+  - md
+  - jpeg
+  - jpg
+  - png
+
+files.imageFormats:
+  - jpeg
+  - jpg
+  - png
+  - webp
+  - gif
+  - bmp
+  - tiff
+  - tif
+
+# false = PyMuPDF only; image files rejected. true requires MISTRAL_API_KEY in .env
+mistral.enabled: false
+mistral.version: mistral-ocr-4-1
+# Fidelity options, so a UI can re-render the document close to the original:
+# html tables keep merged cells; running headers/footers are returned separately
+# (and kept out of the search text); images come back as base64 with their boxes;
+# blocks give every title/text/table/image region with coordinates.
+mistral.tableFormat: html
+mistral.extractHeader: true
+mistral.extractFooter: true
+mistral.includeImages: true
+# Skip icons/logos smaller than this many pixels. mistral.imageLimit caps images per document.
+mistral.imageMinSize: 50
+mistral.includeBlocks: true
+# page | block | word (word adds a score per word and makes responses much larger)
+mistral.confidenceGranularity: page

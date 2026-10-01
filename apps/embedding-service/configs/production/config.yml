@@ -1,0 +1,30 @@
+---
+###############################################################
+#                   PROD
+#      EMBEDDING SERVICE CONFIGURATION
+###############################################################
+# Scraped at GET /metrics on embeddingservice.port. No separate metrics port.
+prometheus.enabled: true
+embeddingservice.port: 5100
+embeddingservice.hostName: 0.0.0.0
+embeddingservice.logFile: null
+embeddingservice.logLevel: info
+fastapi.logLevel: warning
+
+models.enabled:
+  - gte-multilingual-base
+models.prefetchOnStart: true
+models.warmupOnStart: true
+
+gte-multilingual-base.hfModelId: Alibaba-NLP/gte-multilingual-base
+gte-multilingual-base.dimension: 768
+gte-multilingual-base.version: 1
+gte-multilingual-base.maxSeqLength: 8192
+gte-multilingual-base.trustRemoteCode: true
+gte-multilingual-base.extraHubRepos:
+  - Alibaba-NLP/new-impl
+gte-multilingual-base.queryPrefix: ""
+gte-multilingual-base.passagePrefix: ""
+
+normalize_embedding: true
+max_batch_size: 32
