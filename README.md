@@ -8,7 +8,7 @@ sustainability goals) are extracted at ingest.
 
 Author: [Anustup Das](https://github.com/anustupdas).
 
-Local prototype for the ABN AMRO annual-report RAG case assignment. The repo
+Local prototype for the Aannual-report RAG case assignment. The repo
 folder, Python package (`chat_api`) and Postgres database (`chat_project`)
 keep their original names.
 
